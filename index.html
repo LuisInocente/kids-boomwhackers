@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Boomwhacker Play-Along</title>
+  <style>
+    :root{
+      --text:#111827;
+      --muted:#6b7280;
+      --circle:280px;
+      --circleGap:22px;
+      --barLineW:6px;
+      --barLineH:calc(var(--circle) + 44px);
+      --shadow:0 16px 40px rgba(0,0,0,.10);
+      --ring:rgba(255,43,43,.22);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:var(--text);
+      background:#fff;
+      user-select:none; -webkit-user-select:none;
+      overscroll-behavior-x:none;
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      background:#fff;
+      border-bottom:1px solid rgba(0,0,0,.06);
+      padding:10px 12px 12px;
+    }
+    .controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .topRow{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap}
+
+    .btn{
+      border:none; background:#fff;
+      box-shadow:var(--shadow);
+      border-radius:16px;
+      padding:12px 16px;
+      font-size:18px; font-weight:900;
+      cursor:pointer; touch-action:manipulation;
+      white-space:nowrap;
+    }
+    .btn:active{transform:translateY(1px)}
+    .btn.primary.playing{box-shadow:0 0 0 6px rgba(255,43,43,.14), var(--shadow)}
+    .btn.toggledOff{box-shadow:0 0 0 6px rgba(0,0,0,.06), var(--shadow); opacity:.85}
+
+    .pill{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px;
+      border-radius:16px;
+      box-shadow:var(--shadow);
+      background:#fff;
+    }
+    .pillLabel{
+      font-size:12px; color:var(--muted);
+      font-weight:950; letter-spacing:.35px;
+      text-transform:uppercase;
+    }
+    select{
+      border:none; outline:none;
+      font-size:18px; font-weight:900;
+      background:transparent;
+      max-width:360px;
+    }
+    .statusLine{
+      font-weight:950;
+      color:var(--muted);
+      font-size:14px;
+      padding:0 4px;
+      min-height:18px;
+    }
+
+    .paletteRow{margin-top:12px; display:flex; justify-content:center}
+    .swatches{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:center; padding:6px 0}
+    .swatch{
+      width:78px; height:78px;
+      border-radius:999px;
+      border:none;
+      box-shadow:var(--shadow);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:1000; font-size:18px;
+      cursor:pointer; touch-action:manipulation;
+      background:#fff;
+    }
+    .swatch.selected{box-shadow:0 0 0 10px rgba(255,43,43,.16), var(--shadow); transform:scale(1.04)}
+    .swatch.rest{color:transparent; box-shadow:0 0 0 4px rgba(0,0,0,.06), var(--shadow)}
+
+    main{
+      height:calc(100vh - 150px);
+      display:flex; align-items:center; justify-content:center;
+      padding:10px 0 18px;
+    }
+    .scrollWrap{
+      width:100vw;
+      overflow-x:auto; overflow-y:hidden;
+      scroll-snap-type:x mandatory;
+      scroll-padding-left:50%;
+      scroll-padding-right:50%;
+      -webkit-overflow-scrolling:touch;
+      touch-action:pan-x;
+      padding:8px 18px;
+    }
+    .bars{display:flex; gap:90px; width:max-content; align-items:center; padding:8px 0}
+    .bar{scroll-snap-align:center; display:flex; align-items:center; gap:20px}
+    .barLine{width:var(--barLineW); height:var(--barLineH); background:rgba(0,0,0,.12); border-radius:999px}
+    .beats{display:flex; gap:var(--circleGap); align-items:center; justify-content:center}
+    .beat{
+      width:var(--circle); height:var(--circle);
+      border-radius:999px; border:none;
+      background:#fff;
+      box-shadow:var(--shadow);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; touch-action:manipulation;
+      position:relative; overflow:hidden;
+    }
+    .beat:active{transform:scale(.99)}
+    .beat.playhead{
+      box-shadow:
+        0 0 0 18px var(--ring),
+        0 18px 40px rgba(255,43,43,.18),
+        var(--shadow);
+    }
+    .bigLabel{font-size:64px; font-weight:1000; text-shadow:0 3px 14px rgba(0,0,0,.14)}
+
+    .bottomRightWrap{
+      position:fixed; right:12px; bottom:12px; z-index:85;
+      display:flex; align-items:center; gap:10px;
+      pointer-events:none;
+    }
+    .cornerBrand{
+      pointer-events:none;
+      font-weight:950; color:var(--muted);
+      font-size:12px;
+      padding:10px 12px;
+      border-radius:16px;
+      box-shadow:var(--shadow);
+      background:#fff;
+      white-space:nowrap;
+      opacity:.95;
+    }
+    .teacherBtn{
+      pointer-events:auto;
+      width:60px; height:60px;
+      border-radius:18px;
+      border:none; background:#fff;
+      box-shadow:var(--shadow);
+      font-size:22px;
+      cursor:pointer;
+    }
+    .teacherBtn:active{transform:translateY(1px)}
+
+    .overlay{position:fixed; inset:0; background:rgba(0,0,0,.20); z-index:94; display:none}
+    .overlay.show{display:block}
+
+    .teacherPanel{
+      position:fixed; top:0; right:0;
+      height:100%; width:min(560px, 94vw);
+      background:#fff;
+      box-shadow:-18px 0 44px rgba(0,0,0,.18);
+      z-index:95;
+      transform:translateX(110%);
+      transition:transform .22s ease;
+      display:flex; flex-direction:column;
+    }
+    .teacherPanel.open{transform:translateX(0)}
+    .teacherHeader{
+      padding:14px;
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      border-bottom:1px solid rgba(0,0,0,.06);
+    }
+    .teacherHeader h2{margin:0; font-size:16px; font-weight:1000}
+    .teacherClose{
+      border:none; background:rgba(0,0,0,.06);
+      padding:10px 12px; border-radius:14px;
+      font-weight:1000; cursor:pointer;
+    }
+    .teacherBody{padding:14px; overflow:auto; display:flex; flex-direction:column; gap:12px}
+    .panelCard{border:1px solid rgba(0,0,0,.06); border-radius:18px; padding:12px}
+    .panelCardTitle{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px}
+    .panelCardTitle h3{margin:0; font-size:14px; font-weight:1000}
+    .panelHint{font-size:12px; color:var(--muted); font-weight:800}
+
+    textarea{
+      width:100%;
+      min-height:140px;
+      border:none; outline:none;
+      resize:vertical;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+      font-size:13px; line-height:1.35;
+      padding:10px;
+      border-radius:14px;
+      background:rgba(0,0,0,.04);
+    }
+    .rowBtns{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center}
+    .smallBtn{
+      border:none; background:rgba(0,0,0,.06);
+      padding:10px 12px;
+      border-radius:14px;
+      font-weight:1000;
+      cursor:pointer;
+    }
+    .smallBtn.primary{background:rgba(255,43,43,.12)}
+    .smallBtn.danger{background:rgba(255,0,0,.10)}
+    .smallBtn:active{transform:translateY(1px)}
+
+    .bpmRow,.offsetRow,.urlRow,.lenRow{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:10px}
+    .bpmInput{
+      width:110px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(0,0,0,.10);
+      font-size:16px; font-weight:900;
+      outline:none;
+    }
+    .lenInput{
+      width:110px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(0,0,0,.10);
+      font-size:16px; font-weight:900;
+      outline:none;
+    }
+    .urlInput{
+      flex:1 1 260px; min-width:220px;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(0,0,0,.10);
+      font-size:14px; font-weight:800;
+      outline:none;
+    }
+    .toggleRow{display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:10px; font-weight:900}
+    .toggleRow label{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px; border-radius:14px;
+      background:rgba(0,0,0,.04);
+      cursor:pointer;
+    }
+    .toggleRow input{transform:scale(1.2)}
+
+    body.isFullscreen{--circle:320px; --circleGap:26px; --barLineH:calc(var(--circle) + 44px)}
+    @media (max-width:900px){
+      :root{--circle:240px}
+      body.isFullscreen{--circle:290px}
+      .bigLabel{font-size:56px}
+      .cornerBrand{display:none}
+    }
+    @media (max-width:520px){
+      :root{--circle:200px; --circleGap:16px}
+      body.isFullscreen{--circle:240px; --circleGap:18px}
+      .bigLabel{font-size:46px}
+      .bars{gap:70px}
+      .cornerBrand{display:none}
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="topRow">
+    <div class="controls">
+      <button id="playBtn" class="btn primary">▶ Play</button>
+      <button id="stopBtn" class="btn">⏹ Stop</button>
+      <button id="melodyToggleBtn" class="btn">Melody: ON</button>
+      <button id="fsBtn" class="btn">⛶ Fullscreen</button>
+
+      <div class="pill">
+        <span class="pillLabel">Song</span>
+        <select id="songSelect"></select>
+        <button id="prevSong" class="btn" style="padding:12px 14px;">◀</button>
+        <button id="nextSong" class="btn" style="padding:12px 14px;">▶</button>
+      </div>
+
+      <div class="pill">
+        <span class="pillLabel">BPM</span>
+        <span id="bpmBadge" style="font-weight:1000;font-size:18px;">—</span>
+      </div>
+
+      <div class="statusLine" id="statusText"></div>
+    </div>
+  </div>
+
+  <div class="paletteRow">
+    <div class="swatches" id="swatches"></div>
+  </div>
+</header>
+
+<main>
+  <div class="scrollWrap" id="scrollWrap">
+    <div class="bars" id="bars"></div>
+  </div>
+</main>
+
+<div class="bottomRightWrap">
+  <div class="cornerBrand">Muziek met meester Luis 2025</div>
+  <button id="teacherBtn" class="teacherBtn" title="Teacher panel (T)">🔧</button>
+</div>
+
+<div id="overlay" class="overlay"></div>
+
+<aside id="teacherPanel" class="teacherPanel" aria-hidden="true">
+  <div class="teacherHeader">
+    <h2>Teacher Editor</h2>
+    <button id="teacherClose" class="teacherClose">Close</button>
+  </div>
+
+  <div class="teacherBody">
+    <div class="panelCard">
+      <div class="panelCardTitle"><h3>Playback</h3></div>
+      <div class="toggleRow">
+        <label><input id="countInChk" type="checkbox" /> 2-bar count-in</label>
+        <label><input id="melodyChk" type="checkbox" checked /> Melody enabled</label>
+      </div>
+    </div>
+
+    <div class="panelCard">
+      <div class="panelCardTitle"><h3>Tempo (BPM)</h3></div>
+      <div class="bpmRow">
+        <input id="bpmInput" class="bpmInput" type="number" min="40" max="240" step="1" value="120" />
+        <button id="applyBpm" class="smallBtn primary">Apply</button>
+      </div>
+
+      <div class="panelCardTitle" style="margin-top:12px;"><h3>Offset (ms)</h3></div>
+      <div class="offsetRow">
+        <input id="offsetMs" class="bpmInput" type="number" min="-500" max="500" step="1" value="0" />
+        <button id="applyOffset" class="smallBtn primary">Apply</button>
+        <button id="zeroOffset" class="smallBtn">0</button>
+      </div>
+    </div>
+
+    <!-- ✅ NEW: Song length -->
+    <div class="panelCard">
+      <div class="panelCardTitle"><h3>Song length</h3></div>
+      <div class="lenRow">
+        <input id="barsInput" class="lenInput" type="number" min="1" max="128" step="1" value="16" />
+        <button id="applyBars" class="smallBtn primary">Apply</button>
+        <button id="fitBars" class="smallBtn">Fit to melody list</button>
+      </div>
+      <div class="panelHint" id="lenHint" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="panelCard">
+      <div class="panelCardTitle"><h3>Backing track (MP3)</h3></div>
+      <div class="urlRow">
+        <input id="backingUrl" class="urlInput" type="text" placeholder="https://your-site.com/audio/song.mp3" />
+        <button id="loadUrl" class="smallBtn primary">Load URL</button>
+      </div>
+      <div class="rowBtns">
+        <button class="smallBtn" id="loadFile">Load file</button>
+        <button class="smallBtn" id="clearBacking">Remove</button>
+      </div>
+      <div class="rowBtns" style="margin-top:12px;">
+        <div class="panelHint" style="margin-right:6px;">Backing vol</div>
+        <input id="backingVol" type="range" min="0" max="100" value="80" />
+        <div id="backingVolVal" style="font-weight:1000; width:44px; text-align:right;">80</div>
+      </div>
+      <div class="panelHint" id="backingStatus" style="margin-top:10px;color:var(--muted);font-weight:900;"></div>
+    </div>
+
+    <div class="panelCard">
+      <div class="panelCardTitle"><h3>Melody (list)</h3></div>
+      <textarea id="melodyText" spellcheck="false"></textarea>
+      <div class="rowBtns">
+        <button class="smallBtn primary" id="applyMelody">Apply</button>
+        <button class="smallBtn" id="clearMelody">Clear</button>
+      </div>
+    </div>
+
+    <div class="panelCard">
+      <div class="panelCardTitle"><h3>Playlist</h3></div>
+      <input id="saveTitle" type="text" placeholder="Song title…"
+        style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid rgba(0,0,0,.08);font-size:16px;font-weight:800;" />
+      <div class="rowBtns" style="margin-top:10px;">
+        <button class="smallBtn primary" id="saveToPlaylist">Save as new</button>
+        <button class="smallBtn danger" id="deleteSong">Delete this song</button>
+      </div>
+      <div class="panelHint" style="margin-top:10px;">
+        Delete removes the current song from the playlist (cannot be undone).
+      </div>
+    </div>
+  </div>
+</aside>
+
+<script>
+(() => {
+  "use strict";
+
+  const BOOM = [
+    { name:"C",  midi:60, color:"#e53935" },
+    { name:"D",  midi:62, color:"#fb8c00" },
+    { name:"E",  midi:64, color:"#fdd835" },
+    { name:"F",  midi:65, color:"#8ed265" },
+    { name:"G",  midi:67, color:"#008a8c" },
+    { name:"A",  midi:69, color:"#1e88e5" },
+    { name:"B",  midi:71, color:"#6a1b9a" },
+    { name:"C2", midi:72, color:"#c62828" }
+  ];
+  const NOTE_TO_INDEX = Object.fromEntries(BOOM.map((n,i)=>[n.name.toUpperCase(), i]));
+
+  const STORE_KEY = "boomwhacker_playlist_mp3_loopfix_clean_v5";
+  const DEFAULT_SONGS = [{
+    id:"jb_easy",
+    title:"Jingle Bells (Easy)",
+    bpm:110,
+    offsetMs:0,
+    beatsPerBar:4,
+    bars:16,
+    backingUrl:"",
+    countInBars:2,
+    melodyEnabled:true,
+    melodyTokens:[
+      ["E","E","E","/"],["E","E","E","/"],["E","G","C","D"],["E","/","/","/"],
+      ["F","F","F","F"],["F","E","E","E"],["E","D","D","E"],["D","G","/","/"],
+      ["E","E","E","/"],["E","E","E","/"],["E","G","C","D"],["E","/","/","/"],
+      ["F","F","F","F"],["F","E","E","E"],["G","G","F","D"],["C","/","/","/"]
+    ]
+  }];
+
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    bars: $("bars"),
+    play: $("playBtn"),
+    stop: $("stopBtn"),
+    melodyToggle: $("melodyToggleBtn"),
+    fs: $("fsBtn"),
+    songSelect: $("songSelect"),
+    prevSong: $("prevSong"),
+    nextSong: $("nextSong"),
+    bpmBadge: $("bpmBadge"),
+    status: $("statusText"),
+    swatches: $("swatches"),
+
+    teacherBtn: $("teacherBtn"),
+    teacherPanel: $("teacherPanel"),
+    teacherClose: $("teacherClose"),
+    overlay: $("overlay"),
+
+    countInChk: $("countInChk"),
+    melodyChk: $("melodyChk"),
+
+    bpmInput: $("bpmInput"),
+    applyBpm: $("applyBpm"),
+
+    offsetInput: $("offsetMs"),
+    applyOffset: $("applyOffset"),
+    zeroOffset: $("zeroOffset"),
+
+    // ✅ NEW
+    barsInput: $("barsInput"),
+    applyBars: $("applyBars"),
+    fitBars: $("fitBars"),
+    lenHint: $("lenHint"),
+
+    backingUrl: $("backingUrl"),
+    loadUrl: $("loadUrl"),
+    loadFile: $("loadFile"),
+    clearBacking: $("clearBacking"),
+    backingStatus: $("backingStatus"),
+    backingVol: $("backingVol"),
+    backingVolVal: $("backingVolVal"),
+
+    melodyText: $("melodyText"),
+    applyMelody: $("applyMelody"),
+    clearMelody: $("clearMelody"),
+
+    saveTitle: $("saveTitle"),
+    saveToPlaylist: $("saveToPlaylist"),
+    deleteSong: $("deleteSong"),
+  };
+
+  let playlist = loadPlaylist();
+  let currentIndex = 0;
+  let song = null;
+  let grid = [];
+  let selected = 0;
+
+  let isPlaying = false;
+  let bar = 0, beat = 0;
+
+  let ctx = null;
+  let synthGain = null;
+  let backingGain = null;
+  let backingBuffer = null;
+  let backingSource = null;
+
+  const LOOKAHEAD_MS = 25;
+  const SCHEDULE_AHEAD = 0.15;
+  let nextNoteTime = 0;
+  let schedTimer = null;
+
+  const clamp = (v,min,max) => Math.max(min, Math.min(max, v));
+  const uid = () => Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+  const midiToFreq = (m) => 440 * Math.pow(2, (m-69)/12);
+
+  const beatDur = () => 60 / (song?.bpm ?? 120);
+  const bpb = () => song?.beatsPerBar ?? 4;
+  const songLenSec = () => (song?.bars ?? 0) * bpb() * beatDur();
+
+  function isTeacherOpen(){ return el.teacherPanel.classList.contains("open"); }
+  function isTypingTarget(t){
+    if (!t) return false;
+    const tag = (t.tagName || "").toUpperCase();
+    return tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT" || t.isContentEditable;
+  }
+
+  function loadPlaylist(){
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw){
+      localStorage.setItem(STORE_KEY, JSON.stringify(DEFAULT_SONGS));
+      return structuredClone(DEFAULT_SONGS);
+    }
+    try{
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length) return list;
+    }catch{}
+    localStorage.setItem(STORE_KEY, JSON.stringify(DEFAULT_SONGS));
+    return structuredClone(DEFAULT_SONGS);
+  }
+  function savePlaylist(){ localStorage.setItem(STORE_KEY, JSON.stringify(playlist)); }
+
+  function setStatus(msg){ el.status.textContent = msg || ""; }
+  function setBackingStatus(msg){ el.backingStatus.textContent = msg || ""; }
+
+  function ensureAudio(){
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    synthGain = ctx.createGain();
+    synthGain.gain.value = 0.85;
+    synthGain.connect(ctx.destination);
+
+    backingGain = ctx.createGain();
+    backingGain.gain.value = el.backingVol.value / 100;
+    backingGain.connect(ctx.destination);
+  }
+
+  async function decodeToBuffer(arrayBuffer){
+    ensureAudio();
+    await ctx.resume();
+    return await new Promise((resolve, reject) => {
+      ctx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+    });
+  }
+
+  function updateMainHeight(){
+    const h = document.querySelector("header")?.getBoundingClientRect().height ?? 150;
+    document.querySelector("main").style.height = `calc(100vh - ${Math.ceil(h)}px)`;
+  }
+
+  /* ===== Palette ===== */
+  function updatePaletteSel(){
+    const nodes = [...el.swatches.querySelectorAll(".swatch")];
+    nodes.forEach(n => n.classList.remove("selected"));
+    if (selected === -1) nodes[0]?.classList.add("selected");
+    else nodes[selected + 1]?.classList.add("selected");
+  }
+
+  function renderPalette(){
+    el.swatches.innerHTML = "";
+
+    const rest = document.createElement("div");
+    rest.className = "swatch rest";
+    rest.textContent = "";
+    rest.title = "Rest";
+    rest.onclick = () => { selected = -1; updatePaletteSel(); };
+    el.swatches.appendChild(rest);
+
+    BOOM.forEach((n, i) => {
+      const s = document.createElement("div");
+      s.className = "swatch";
+      s.style.background = n.color;
+      s.style.color = (i === 2 || i === 3) ? "#1b1b1b" : "#fff";
+      s.textContent = n.name;
+      s.onclick = async () => {
+        selected = i;
+        updatePaletteSel();
+        if (!song?.melodyEnabled) return;
+        ensureAudio();
+        await ctx.resume();
+        previewNote(i);
+      };
+      el.swatches.appendChild(s);
+    });
+
+    updatePaletteSel();
+  }
+
+  /* ===== Grid render ===== */
+  function paintBeat(btn, noteIndex){
+    btn.style.background = "#fff";
+    btn.style.color = "#111827";
+    btn.querySelector(".bigLabel")?.remove();
+    if (noteIndex == null) return;
+
+    const n = BOOM[noteIndex];
+    btn.style.background = n.color;
+    btn.style.color = (noteIndex === 2 || noteIndex === 3) ? "#1b1b1b" : "#fff";
+
+    const big = document.createElement("div");
+    big.className = "bigLabel";
+    big.textContent = n.name;
+    btn.appendChild(big);
+  }
+
+  function clearPlayhead(){
+    document.querySelectorAll(".beat.playhead").forEach(x => x.classList.remove("playhead"));
+  }
+
+  function centerBar(i, smooth=true){
+    const barEl = document.querySelector(`.bar[data-bar="${i}"]`);
+    if (!barEl) return;
+    barEl.scrollIntoView({ behavior: smooth ? "smooth" : "auto", inline:"center", block:"nearest" });
+  }
+
+  function setPlayhead(iBar, iBeat){
+    clearPlayhead();
+    const node = document.querySelector(`.beat[data-bar="${iBar}"][data-beat="${iBeat}"]`);
+    if (node) node.classList.add("playhead");
+    if (iBeat === 0) centerBar(iBar, true);
+  }
+
+  function renderSong(){
+    el.bars.innerHTML = "";
+    for (let b=0; b<song.bars; b++){
+      const barWrap = document.createElement("div");
+      barWrap.className = "bar";
+      barWrap.dataset.bar = String(b);
+
+      const line = document.createElement("div");
+      line.className = "barLine";
+      barWrap.appendChild(line);
+
+      const beats = document.createElement("div");
+      beats.className = "beats";
+
+      for (let i=0; i<bpb(); i++){
+        const btn = document.createElement("button");
+        btn.className = "beat";
+        btn.type = "button";
+        btn.dataset.bar = String(b);
+        btn.dataset.beat = String(i);
+
+        btn.onclick = async () => {
+          const bb = Number(btn.dataset.bar);
+          const ii = Number(btn.dataset.beat);
+
+          const cur = grid[bb][ii];
+          let next = null;
+          if (selected !== -1) next = (cur === selected) ? null : selected;
+
+          grid[bb][ii] = next;
+          paintBeat(btn, next);
+
+          persistCurrentMelodyToSong();
+          syncMelodyText();
+
+          if (next != null && song.melodyEnabled){
+            ensureAudio();
+            await ctx.resume();
+            previewNote(next);
+          }
+        };
+
+        paintBeat(btn, grid[b][i]);
+        beats.appendChild(btn);
+      }
+
+      barWrap.appendChild(beats);
+      el.bars.appendChild(barWrap);
+    }
+
+    requestAnimationFrame(() => {
+      centerBar(0, false);
+      setPlayhead(0,0);
+      updateMainHeight();
+      updateLenHint();
+    });
+  }
+
+  /* ===== Melody list: '/' is rest ===== */
+  function gridRowToTokens(row){
+    return row.map(v => (v == null) ? "/" : BOOM[v].name);
+  }
+  function tokensToRow(tokens){
+    const row = [];
+    for (let i=0; i<bpb(); i++){
+      const tok = (tokens[i] ?? "/").trim();
+      if (!tok || tok === "/" || tok === "." || tok === "-" || tok.toLowerCase() === "rest"){
+        row.push(null);
+      } else {
+        const idx = NOTE_TO_INDEX[tok.toUpperCase()];
+        row.push(typeof idx === "number" ? idx : null);
+      }
+    }
+    return row;
+  }
+  function syncMelodyText(){
+    el.melodyText.value = grid.map((row, i) => `${i+1}\t${gridRowToTokens(row).join(" ")}`).join("\n");
+  }
+  function parseMelodyText(text){
+    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const out = new Array(Math.max(1, song.bars)).fill(0).map(()=>new Array(bpb()).fill(null));
+    for (let i=0; i<Math.min(lines.length, out.length); i++){
+      const m = lines[i].match(/^(\d+)[\t ]+(.*)$/);
+      const tail = (m ? m[2] : lines[i]).trim();
+      out[i] = tokensToRow(tail.split(/\s+/).filter(Boolean));
+    }
+    return out;
+  }
+  function persistCurrentMelodyToSong(){
+    const tokens = grid.map(r => gridRowToTokens(r));
+    song.melodyTokens = tokens;
+    playlist[currentIndex].melodyTokens = tokens;
+    savePlaylist();
+  }
+  function persistMelodyTextToSong(){
+    grid = parseMelodyText(el.melodyText.value);
+    persistCurrentMelodyToSong();
+  }
+
+  /* ===== NEW: Song length helpers ===== */
+  function updateLenHint(){
+    if (!song) return;
+    const secs = songLenSec();
+    const mm = Math.floor(secs / 60);
+    const ss = Math.round(secs % 60).toString().padStart(2,"0");
+    el.lenHint.textContent = `Bars: ${song.bars}  •  Approx length: ${mm}:${ss} at ${song.bpm} BPM`;
+  }
+
+  function resizeSongBars(newBars){
+    newBars = clamp(Math.round(Number(newBars) || song.bars), 1, 128);
+
+    // expand / shrink grid
+    const oldBars = song.bars;
+    song.bars = newBars;
+    playlist[currentIndex].bars = newBars;
+
+    if (grid.length < newBars){
+      while (grid.length < newBars) grid.push(new Array(bpb()).fill(null));
+    } else if (grid.length > newBars){
+      grid = grid.slice(0, newBars);
+    }
+
+    // also clamp melodyTokens to new length
+    persistCurrentMelodyToSong();
+
+    // update inputs + rerender
+    el.barsInput.value = String(newBars);
+    savePlaylist();
+    renderSong();
+
+    // if playing, restart so scheduling matches new loop length
+    if (isPlaying){ stop(); start(); }
+  }
+
+  function fitBarsToMelodyText(){
+    const lines = el.melodyText.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const newBars = clamp(lines.length || 1, 1, 128);
+    resizeSongBars(newBars);
+  }
+
+  /* ===== Synth ===== */
+  function playBoom(noteIndex, time, len){
+    const f = midiToFreq(BOOM[noteIndex].midi);
+
+    const o1 = ctx.createOscillator();
+    const o2 = ctx.createOscillator();
+    const g = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+
+    o1.type = "sine";
+    o2.type = "triangle";
+    o1.frequency.setValueAtTime(f, time);
+    o2.frequency.setValueAtTime(f*2, time);
+
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(2600, time);
+    lp.Q.setValueAtTime(0.7, time);
+
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(0.66, time + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, time + len);
+
+    o1.connect(lp); o2.connect(lp);
+    lp.connect(g); g.connect(synthGain);
+
+    o1.start(time); o2.start(time);
+    o1.stop(time + len + 0.02);
+    o2.stop(time + len + 0.02);
+  }
+  function previewNote(noteIndex){
+    playBoom(noteIndex, ctx.currentTime + 0.01, 0.24);
+  }
+  function playClick(time, strong){
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "square";
+    o.frequency.setValueAtTime(strong ? 1800 : 1200, time);
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(0.25, time + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(time); o.stop(time + 0.05);
+  }
+
+  /* ===== Backing track (loop fix) ===== */
+  function stopBacking(){
+    if (!backingSource) return;
+    try{ backingSource.stop(); }catch{}
+    try{ backingSource.disconnect(); }catch{}
+    backingSource = null;
+  }
+  function startBackingAt(time){
+    if (!backingBuffer) return false;
+    stopBacking();
+    const src = ctx.createBufferSource();
+    src.buffer = backingBuffer;
+    src.connect(backingGain);
+
+    const loopEnd = Math.min(backingBuffer.duration, songLenSec());
+    src.loop = true;
+    if (loopEnd > 0.05){
+      src.loopStart = 0;
+      src.loopEnd = loopEnd;
+    }
+    src.start(time);
+    backingSource = src;
+    return true;
+  }
+  async function loadBackingFromUrl(url){
+    setBackingStatus("Loading URL…");
+    const res = await fetch(url, { cache:"no-store" });
+    if (!res.ok) throw new Error("Fetch failed");
+    backingBuffer = await decodeToBuffer(await res.arrayBuffer());
+    setBackingStatus("Backing loaded");
+  }
+  async function loadBackingFromFile(file){
+    setBackingStatus("Loading file…");
+    backingBuffer = await decodeToBuffer(await file.arrayBuffer());
+    setBackingStatus("Backing loaded");
+  }
+
+  /* ===== Transport ===== */
+  function nextStep(){
+    beat++;
+    if (beat >= bpb()){
+      beat = 0;
+      bar++;
+      if (bar >= song.bars) bar = 0;
+    }
+  }
+  function scheduleStep(sBar, sBeat, time){
+    setTimeout(() => setPlayhead(sBar, sBeat), 0);
+    if (!song.melodyEnabled) return;
+    const n = grid[sBar][sBeat];
+    if (n != null){
+      const len = Math.min(0.55, beatDur() * 0.95);
+      playBoom(n, time, len);
+    }
+  }
+  function scheduler(){
+    while (nextNoteTime < ctx.currentTime + SCHEDULE_AHEAD){
+      scheduleStep(bar, beat, nextNoteTime);
+      nextNoteTime += beatDur();
+      nextStep();
+    }
+  }
+
+  function start(){
+    if (isPlaying) return;
+    ensureAudio();
+    ctx.resume();
+
+    isPlaying = true;
+    el.play.classList.add("playing");
+    el.play.textContent = "⏸ Playing";
+
+    bar = 0; beat = 0;
+    centerBar(0, false);
+    setPlayhead(0,0);
+
+    const baseStart = ctx.currentTime + 0.10;
+    const countBars = song.countInBars ? 2 : 0;
+    const countSecs = countBars * bpb() * beatDur();
+    const startAt = baseStart + countSecs;
+
+    // no count-in status text
+    if (countBars){
+      const totalBeats = countBars * bpb();
+      const d = beatDur();
+      const startClick = startAt - totalBeats * d;
+      for (let k=0; k<totalBeats; k++){
+        playClick(startClick + k*d, (k % bpb()) === 0);
+      }
+    }
+
+    const userOff = (song.offsetMs || 0) / 1000;
+    const backingStart = startAt - userOff;
+
+    if (backingBuffer){
+      startBackingAt(backingStart);
+      setBackingStatus("Playing");
+    } else {
+      setBackingStatus("No backing loaded");
+    }
+
+    nextNoteTime = startAt;
+    schedTimer = setInterval(scheduler, LOOKAHEAD_MS);
+  }
+
+  function stop(){
+    if (!isPlaying) return;
+    isPlaying = false;
+
+    el.play.classList.remove("playing");
+    el.play.textContent = "▶ Play";
+
+    if (schedTimer) clearInterval(schedTimer);
+    schedTimer = null;
+
+    stopBacking();
+    setStatus("");
+
+    bar = 0; beat = 0;
+    clearPlayhead();
+    setPlayhead(0,0);
+    centerBar(0, true);
+
+    setBackingStatus(backingBuffer ? "Backing loaded" : "No backing loaded");
+  }
+
+  /* ===== UI helpers ===== */
+  function updateToggles(){
+    const melOn = !!song.melodyEnabled;
+    el.melodyToggle.textContent = `Melody: ${melOn ? "ON" : "OFF"}`;
+    el.melodyToggle.classList.toggle("toggledOff", !melOn);
+    el.countInChk.checked = !!song.countInBars;
+    el.melodyChk.checked = melOn;
+  }
+
+  function openTeacher(){
+    el.teacherPanel.classList.add("open");
+    el.teacherPanel.setAttribute("aria-hidden","false");
+    el.overlay.classList.add("show");
+
+    el.saveTitle.value = song.title ?? "";
+    el.bpmInput.value = String(song.bpm ?? 120);
+    el.offsetInput.value = String(song.offsetMs ?? 0);
+    el.barsInput.value = String(song.bars ?? 16);
+    el.backingUrl.value = song.backingUrl ?? "";
+
+    syncMelodyText();
+    updateToggles();
+    updateLenHint();
+    setTimeout(() => el.melodyText.focus(), 0);
+  }
+  function closeTeacher(){
+    el.teacherPanel.classList.remove("open");
+    el.teacherPanel.setAttribute("aria-hidden","true");
+    el.overlay.classList.remove("show");
+  }
+
+  function renderSongSelect(){
+    el.songSelect.innerHTML = "";
+    playlist.forEach((s, i) => {
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = s.title || `Song ${i+1}`;
+      el.songSelect.appendChild(opt);
+    });
+    el.songSelect.value = String(currentIndex);
+  }
+
+  async function loadSong(i){
+    currentIndex = clamp(i, 0, playlist.length - 1);
+    song = playlist[currentIndex];
+
+    song.offsetMs = typeof song.offsetMs === "number" ? song.offsetMs : 0;
+    song.backingUrl = typeof song.backingUrl === "string" ? song.backingUrl : "";
+    song.beatsPerBar = song.beatsPerBar || 4;
+    song.bars = clamp(song.bars || 8, 1, 128);
+    song.countInBars = typeof song.countInBars === "number" ? song.countInBars : 2;
+    song.melodyEnabled = typeof song.melodyEnabled === "boolean" ? song.melodyEnabled : true;
+
+    grid = (song.melodyTokens || [])
+      .slice(0, song.bars)
+      .map(row => tokensToRow(Array.isArray(row) ? row : []));
+
+    // if song has fewer melody rows than bars, pad
+    while (grid.length < song.bars) grid.push(new Array(bpb()).fill(null));
+
+    renderSongSelect();
+    renderSong();
+
+    el.bpmBadge.textContent = String(song.bpm);
+    el.bpmInput.value = String(song.bpm);
+    el.offsetInput.value = String(song.offsetMs);
+    el.barsInput.value = String(song.bars);
+    el.backingUrl.value = song.backingUrl || "";
+
+    updateToggles();
+    setStatus("");
+    updateLenHint();
+
+    backingBuffer = null;
+    setBackingStatus("No backing loaded");
+    if (song.backingUrl){
+      try{ await loadBackingFromUrl(song.backingUrl); }
+      catch{ backingBuffer = null; setBackingStatus("Backing URL failed to load"); }
+    }
+  }
+
+  function applyBpm(v){
+    const bpm = clamp(Math.round(Number(v) || 120), 40, 240);
+    song.bpm = bpm;
+    playlist[currentIndex].bpm = bpm;
+    savePlaylist();
+    el.bpmBadge.textContent = String(bpm);
+    updateLenHint();
+    if (isPlaying){ stop(); start(); }
+  }
+  function applyOffset(v){
+    const ms = clamp(Math.round(Number(v) || 0), -500, 500);
+    song.offsetMs = ms;
+    playlist[currentIndex].offsetMs = ms;
+    savePlaylist();
+    if (isPlaying){ stop(); start(); }
+  }
+
+  /* ===== Events ===== */
+  function wire(){
+    el.play.onclick = () => isPlaying ? stop() : start();
+    el.stop.onclick = stop;
+
+    el.melodyToggle.onclick = () => {
+      song.melodyEnabled = !song.melodyEnabled;
+      playlist[currentIndex].melodyEnabled = song.melodyEnabled;
+      savePlaylist();
+      updateToggles();
+    };
+
+    el.fs.onclick = async () => {
+      try{
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+        else await document.exitFullscreen();
+      }catch{}
+    };
+
+    document.addEventListener("fullscreenchange", () => {
+      el.fs.textContent = document.fullscreenElement ? "⛶ Exit" : "⛶ Fullscreen";
+      document.body.classList.toggle("isFullscreen", !!document.fullscreenElement);
+      requestAnimationFrame(() => { updateMainHeight(); centerBar(0, false); });
+    });
+
+    el.teacherBtn.onclick = () => isTeacherOpen() ? closeTeacher() : openTeacher();
+    el.teacherClose.onclick = closeTeacher;
+    el.overlay.onclick = closeTeacher;
+
+    el.countInChk.onchange = () => {
+      song.countInBars = el.countInChk.checked ? 2 : 0;
+      playlist[currentIndex].countInBars = song.countInBars;
+      savePlaylist();
+    };
+    el.melodyChk.onchange = () => {
+      song.melodyEnabled = !!el.melodyChk.checked;
+      playlist[currentIndex].melodyEnabled = song.melodyEnabled;
+      savePlaylist();
+      updateToggles();
+    };
+
+    el.applyBpm.onclick = () => applyBpm(el.bpmInput.value);
+    el.applyOffset.onclick = () => applyOffset(el.offsetInput.value);
+    el.zeroOffset.onclick = () => { el.offsetInput.value = "0"; applyOffset(0); };
+
+    // ✅ NEW: apply song length
+    el.applyBars.onclick = () => resizeSongBars(el.barsInput.value);
+    el.fitBars.onclick = () => fitBarsToMelodyText();
+
+    el.prevSong.onclick = () => loadSong(currentIndex - 1);
+    el.nextSong.onclick = () => loadSong(currentIndex + 1);
+    el.songSelect.onchange = () => loadSong(parseInt(el.songSelect.value, 10));
+
+    el.backingVolVal.textContent = el.backingVol.value;
+    el.backingVol.oninput = () => {
+      el.backingVolVal.textContent = el.backingVol.value;
+      if (backingGain) backingGain.gain.value = el.backingVol.value / 100;
+    };
+
+    el.loadUrl.onclick = async () => {
+      const url = (el.backingUrl.value || "").trim();
+      if (!url) return;
+      try{
+        await loadBackingFromUrl(url);
+        song.backingUrl = url;
+        playlist[currentIndex].backingUrl = url;
+        savePlaylist();
+      }catch{
+        backingBuffer = null;
+        setBackingStatus("Backing URL failed (CORS / 404)");
+      }
+    };
+
+    el.loadFile.onclick = () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "audio/mpeg,audio/mp3,audio/*";
+      input.click();
+      input.onchange = async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        try{ await loadBackingFromFile(file); }
+        catch{ backingBuffer = null; setBackingStatus("Backing file failed"); }
+      };
+    };
+
+    el.clearBacking.onclick = () => {
+      stop();
+      backingBuffer = null;
+      setBackingStatus("No backing loaded");
+      el.backingUrl.value = "";
+      song.backingUrl = "";
+      playlist[currentIndex].backingUrl = "";
+      savePlaylist();
+    };
+
+    el.applyMelody.onclick = () => {
+      persistMelodyTextToSong();
+      renderSong();
+    };
+
+    el.clearMelody.onclick = () => {
+      grid = new Array(song.bars).fill(0).map(()=>new Array(bpb()).fill(null));
+      persistCurrentMelodyToSong();
+      renderSong();
+      syncMelodyText();
+    };
+
+    el.saveToPlaylist.onclick = () => {
+      persistMelodyTextToSong();
+      const title = (el.saveTitle.value || "New song").trim();
+      const newSong = {
+        id: uid(),
+        title,
+        bpm: clamp(Number(el.bpmInput.value || song.bpm || 120), 40, 240),
+        offsetMs: clamp(Number(el.offsetInput.value || song.offsetMs || 0), -500, 500),
+        beatsPerBar: song.beatsPerBar,
+        bars: song.bars,
+        backingUrl: song.backingUrl || "",
+        countInBars: song.countInBars ? 2 : 0,
+        melodyEnabled: !!song.melodyEnabled,
+        melodyTokens: grid.map(r => gridRowToTokens(r))
+      };
+      playlist.push(newSong);
+      savePlaylist();
+      loadSong(playlist.length - 1);
+    };
+
+    el.deleteSong.onclick = () => {
+      if (playlist.length <= 1) return;
+      if (!confirm(`Delete "${song.title}" from playlist?`)) return;
+      stop();
+      playlist.splice(currentIndex, 1);
+      savePlaylist();
+      loadSong(clamp(currentIndex, 0, playlist.length - 1));
+    };
+
+    window.addEventListener("resize", () => { updateMainHeight(); centerBar(0, false); }, { passive:true });
+
+    window.addEventListener("keydown", (e) => {
+      const isSpace = e.code === "Space" || e.key === " ";
+      if (isTeacherOpen() && isSpace){
+        if (isTypingTarget(e.target)) return;
+        e.preventDefault();
+        return;
+      }
+      if (isTypingTarget(e.target)) return;
+
+      if (e.code === "Space"){
+        e.preventDefault();
+        isPlaying ? stop() : start();
+      }
+      if (e.key?.toLowerCase() === "t"){
+        e.preventDefault();
+        isTeacherOpen() ? closeTeacher() : openTeacher();
+      }
+    }, { capture:true });
+  }
+
+  function init(){
+    renderPalette();
+    el.fs.textContent = document.fullscreenElement ? "⛶ Exit" : "⛶ Fullscreen";
+    updateMainHeight();
+    setBackingStatus("No backing loaded");
+    setStatus("");
+    wire();
+    loadSong(0);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
